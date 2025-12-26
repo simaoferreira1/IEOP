@@ -30,7 +30,7 @@ router.post("/", async (req, res) => {
 
     const createPath = "/documents"; 
 
-    const { customerId, items, paymentMethod, notes, externalRef } = req.body;
+    const { customerId, items, notes, externalRef } = req.body;
 
     if (!customerId || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ ok: false, error: "Pedido inválido. customerId e items são obrigatórios." });
@@ -45,30 +45,23 @@ router.post("/", async (req, res) => {
     const productsText = await productsResponse.text();
     const productsData = safeJsonParse(productsText);
 
-    if (!productsResponse.ok) {
-       console.warn("Aviso: Não foi possível validar stock no Vendus, a prosseguir mesmo assim.");
-    }
-
     const productsRows = Array.isArray(productsData?.data)
       ? productsData.data
       : Array.isArray(productsData)
         ? productsData
         : [];
 
-    let total = 0;
-
     const orderLines = items.map((item) => {
       const productId = item.productId ?? item.id;
       const qty = Number(item.quantity ?? item.qty ?? 0);
 
       const product = productsRows.find((p) => String(p.id) === String(productId));
-      
       const price = product ? Number(product.price ?? 0) : 0; 
       
       return {
-        product_id: productId,
+        id: productId,
         qty: qty,
-        price: price 
+        gross_price: price 
       };
     });
 
@@ -76,16 +69,11 @@ router.post("/", async (req, res) => {
 
     const bodyToVendus = {
       type: "EC",                 
-      payment_method_id: 1,      
-      items: orderLines,         
-      
+      items: orderLines,          
       client: { id: customerId }, 
-      
       notes: notes || undefined,
       reference: externalRef || undefined
     };
-
-    console.log("A enviar para o Vendus:", JSON.stringify(bodyToVendus)); 
 
     const orderResponse = await fetch(createUrl, {
       method: "POST",
@@ -100,7 +88,6 @@ router.post("/", async (req, res) => {
     const orderData = safeJsonParse(orderText);
 
     if (!orderResponse.ok) {
-      console.error("Erro Vendus:", orderData);
       return res.status(orderResponse.status).json({
         ok: false,
         error: "Erro ao criar Encomenda no Vendus",
@@ -116,7 +103,6 @@ router.post("/", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Erro /orders:", err);
     return res.status(500).json({ ok: false, error: err?.message || "Erro interno do servidor" });
   }
 });
@@ -145,7 +131,6 @@ router.get("/", async (req, res) => {
 
     return res.json({ ok: true, data }); 
   } catch (err) {
-    console.error("Erro GET /orders:", err);
     return res.status(500).json({ ok: false, error: "Erro interno do servidor" });
   }
 });
